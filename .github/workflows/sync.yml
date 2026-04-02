@@ -1,1 +1,41 @@
+name: Match Sync
 
+on:
+  repository_dispatch:
+    types: [trigger-sync]
+  workflow_dispatch:
+
+concurrency:
+  group: internal-sync-group
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Scraper
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          GAME_SERVER_API: ${{ secrets.GAME_SERVER_API }}
+          CF_URLS: ${{ secrets.CF_URLS }}
+          TOKEN: ${{ secrets.TOKEN }}
+          ID: ${{ secrets.ID }}
+          P_PASS: ${{ secrets.P_PASS }}
+        run: python match_sync.py
