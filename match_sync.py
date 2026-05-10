@@ -47,18 +47,24 @@ def clean_number(text):
 
 def parse_src_0(html, round_num):
     soup = BeautifulSoup(html, 'lxml')
-    tbody = soup.find('tbody')
-    if not tbody: return None, None
-    rows = tbody.find_all('tr')
-    if len(rows) < 2: return None, None
-    col_idx = round_num - 1
-    try:
-        m_cells = rows[0].find_all('td')
-        s_cells = rows[1].find_all('td')
-        if len(m_cells) > col_idx and len(s_cells) > col_idx:
-            return clean_number(m_cells[col_idx].text), clean_number(s_cells[col_idx].text)
-    except Exception:
-        pass
+    
+    containers = soup.find_all('div', class_='flex flex-1 flex-col items-center')
+    
+    if len(containers) >= round_num:
+        target_round = containers[round_num - 1]
+        
+        spans = target_round.find_all('span')
+        
+        if len(spans) >= 3:
+            m_text = spans[1].get_text(strip=True)
+            s_text = spans[2].get_text(strip=True)
+            
+            m = clean_number(m_text)
+            s = clean_number(s_text)
+            
+            if m and s:
+                return m, s
+                
     return None, None
 
 def parse_src_1(html, round_num):
