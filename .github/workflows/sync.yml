@@ -34,8 +34,6 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
           GAME_SERVER_API: ${{ secrets.GAME_SERVER_API }}
-          CF_URLS: ${{ secrets.CF_URLS }}
-          TOKEN: ${{ secrets.TOKEN }}
-          ID: ${{ secrets.ID }}
+          WEBHOOK_URLS: ${{ secrets.WEBHOOK_URLS }}
           P_PASS: ${{ secrets.P_PASS }}
         run: python match_sync.py
