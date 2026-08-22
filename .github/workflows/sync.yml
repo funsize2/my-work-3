@@ -2,21 +2,23 @@ name: Match Sync
 
 on:
   repository_dispatch:
-    types: [start-sync, match-sync]
+    types: [trigger-sync, start-sync, match-sync]
   workflow_dispatch:
 
 concurrency:
-  group: match-sync-group
+  group: internal-sync-group
   cancel-in-progress: true
 
 jobs:
-  sync:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -25,7 +27,7 @@ jobs:
         run: |
           pip install requests beautifulsoup4 lxml
 
-      - name: Execute Sync
+      - name: Run Scraper
         env:
           GAME_SERVER_API: ${{ secrets.GAME_SERVER_API }}
           RUN_TIMES: ${{ secrets.RUN_TIMES }}
