@@ -2,38 +2,45 @@ name: Match Sync
 
 on:
   repository_dispatch:
-    types: [trigger-sync]
+    types: [start-sync, match-sync]
   workflow_dispatch:
 
 concurrency:
-  group: internal-sync-group
+  group: match-sync-group
   cancel-in-progress: true
 
 jobs:
-  build:
+  sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
+          pip install requests beautifulsoup4 lxml
 
-      - name: Run Scraper
+      - name: Execute Sync
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: ${{ secrets.DB_NAME }}
           GAME_SERVER_API: ${{ secrets.GAME_SERVER_API }}
+          RUN_TIMES: ${{ secrets.RUN_TIMES }}
           WEBHOOK_URLS: ${{ secrets.WEBHOOK_URLS }}
           P_PASS: ${{ secrets.P_PASS }}
+          LOOP_DURATION: ${{ secrets.LOOP_DURATION }}
+          SLEEP_MIN: ${{ secrets.SLEEP_MIN }}
+          SLEEP_MAX: ${{ secrets.SLEEP_MAX }}
+          BACKOFF_MIN: ${{ secrets.BACKOFF_MIN }}
+          BACKOFF_MAX: ${{ secrets.BACKOFF_MAX }}
+          SRC_1_PREFIX: ${{ secrets.SRC_1_PREFIX }}
+          SRC_1_M_CLASS: ${{ secrets.SRC_1_M_CLASS }}
+          SRC_1_S_CLASS: ${{ secrets.SRC_1_S_CLASS }}
+          SRC_2_CONTAINER: ${{ secrets.SRC_2_CONTAINER }}
+          SRC_3_CONTAINER: ${{ secrets.SRC_3_CONTAINER }}
+          SRC_4_CLASS: ${{ secrets.SRC_4_CLASS }}
+          SRC_5_GRID: ${{ secrets.SRC_5_GRID }}
         run: python match_sync.py
