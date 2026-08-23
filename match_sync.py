@@ -336,12 +336,8 @@ def main():
         print("Initial fetch completed (empty or new day record).")
     active_round, active_time = get_active_round()
     s1_verified_rounds = set()
-    target_up_to = active_round if active_round else 8
     if active_round:
         print(f"Active Window: Round {active_round} (Scheduled {active_time})")
-        if all(existing_row.get(f"r{r}_multi") for r in range(1, target_up_to + 1)):
-            print(f"All rounds up to Round {target_up_to} are already recorded. Exiting immediately.")
-            sys.exit(0)
     else:
         print("Standard Scan Mode (No specific scheduled window active).")
     start_time = time.time()
@@ -391,7 +387,7 @@ def main():
                                     existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
                                     data_updated = True
                             else:
-                                pass
+                                print(f"[Source 1 Master Verified] Round {i} matches existing DB ({curr_m}-{curr_s}).")
                         else:
                             print(f"[Source {idx} Speed] Inserting Round {i}: ({m_str}-{s_str})")
                             updated, fresh_data = update_round_record(i, m_str, s_str, is_master=0)
@@ -401,12 +397,17 @@ def main():
             except Exception as err:
                 print(f"Source {idx} Warning: {err}")
             if active_round:
-                if all(existing_row.get(f"r{r}_multi") for r in range(1, active_round + 1)):
-                    print(f"All rounds from 1 to {active_round} are captured and saved. Exiting gracefully.")
+                rounds_up_to_active = range(1, active_round + 1)
+                all_exist = all(existing_row.get(f"r{r}_multi") for r in rounds_up_to_active)
+                all_verified = all(r in s1_verified_rounds for r in rounds_up_to_active)
+                if all_exist and all_verified:
+                    print(f"✅ Rounds 1 to {active_round} verified with Source 1. Stopping runner and exiting.")
                     sys.exit(0)
             else:
-                if all(existing_row.get(f"r{r}_multi") for r in range(1, 9)):
-                    print("All 8 daily rounds are completely filled. Exiting gracefully.")
+                all_8_exist = all(existing_row.get(f"r{r}_multi") for r in range(1, 9))
+                all_8_verified = all(r in s1_verified_rounds for r in range(1, 9))
+                if all_8_exist and all_8_verified:
+                    print("✅ All 8 daily rounds verified with Source 1. Stopping runner and exiting.")
                     sys.exit(0)
             sleep_time = random.uniform(SLEEP_MIN, SLEEP_MAX) if not data_updated else random.uniform(1.0, 2.0)
             time.sleep(sleep_time)
