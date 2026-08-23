@@ -2,7 +2,7 @@ name: Match Sync
 
 on:
   repository_dispatch:
-    types: [trigger-sync, start-sync, match-sync]
+    types: [trigger-sync]
   workflow_dispatch:
 
 concurrency:
