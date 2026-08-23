@@ -336,16 +336,15 @@ def main():
         print("Initial fetch completed (empty or new day record).")
     active_round, active_time = get_active_round()
     s1_verified_rounds = set()
+    target_up_to = active_round if active_round else 8
     if active_round:
-        curr_m = str(existing_row.get(f"r{active_round}_multi") or '').strip()
         print(f"Active Window: Round {active_round} (Scheduled {active_time})")
-        if all(existing_row.get(f"r{r}_multi") for r in range(1, 9)):
-            print("All 8 daily rounds are already completed. Exiting immediately.")
+        if all(existing_row.get(f"r{r}_multi") for r in range(1, target_up_to + 1)):
+            print(f"All rounds up to Round {target_up_to} are already recorded. Exiting immediately.")
             sys.exit(0)
     else:
         print("Standard Scan Mode (No specific scheduled window active).")
     start_time = time.time()
-    active_target_completed = False
     while (time.time() - start_time) < LOOP_DURATION:
         for idx, url in enumerate(SITES, start=1):
             if (time.time() - start_time) >= LOOP_DURATION:
@@ -383,39 +382,33 @@ def main():
                                 print(f"[Source 1 Master] Inserting Round {i}: ({m_str}-{s_str})")
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
-                                    existing_row = fresh_data
+                                    existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
                                     data_updated = True
-                                    print(f"✅ Round {i} saved & cache purged. Target completed.")
-                                    sys.exit(0)
-                                if active_round == i:
-                                    active_target_completed = True
                             elif curr_m != m_str or curr_s != s_str:
                                 print(f"[Source 1 Master Verification] Correcting Round {i} from ({curr_m}-{curr_s}) to ({m_str}-{s_str})")
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
-                                    existing_row = fresh_data
+                                    existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
                                     data_updated = True
-                                    print(f"✅ Round {i} corrected & cache purged. Target completed.")
-                                    sys.exit(0)
-                                if active_round == i:
-                                    active_target_completed = True
                             else:
-                                if active_round == i:
-                                    active_target_completed = True
+                                pass
                         else:
                             print(f"[Source {idx} Speed] Inserting Round {i}: ({m_str}-{s_str})")
                             updated, fresh_data = update_round_record(i, m_str, s_str, is_master=0)
                             if updated:
-                                existing_row = fresh_data
+                                existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
                                 data_updated = True
-                                print(f"⚡ Round {i} live-inserted & cache purged. Target completed.")
-                                sys.exit(0)
             except Exception as err:
                 print(f"Source {idx} Warning: {err}")
-            if active_round and active_target_completed and (active_round in s1_verified_rounds):
-                print(f"Target Round {active_round} is verified by Master Source 1. Exiting gracefully.")
-                sys.exit(0)
-            sleep_time = random.uniform(SLEEP_MIN, SLEEP_MAX)
+            if active_round:
+                if all(existing_row.get(f"r{r}_multi") for r in range(1, active_round + 1)):
+                    print(f"All rounds from 1 to {active_round} are captured and saved. Exiting gracefully.")
+                    sys.exit(0)
+            else:
+                if all(existing_row.get(f"r{r}_multi") for r in range(1, 9)):
+                    print("All 8 daily rounds are completely filled. Exiting gracefully.")
+                    sys.exit(0)
+            sleep_time = random.uniform(SLEEP_MIN, SLEEP_MAX) if not data_updated else random.uniform(1.0, 2.0)
             time.sleep(sleep_time)
     print(f"Loop completed ({int(time.time() - start_time)}s). Exiting.")
 
