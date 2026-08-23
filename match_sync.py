@@ -7,15 +7,18 @@ import datetime
 import requests
 from bs4 import BeautifulSoup
 
-SITES = [s.strip() for s in os.environ.get('GAME_SERVER_API', '').split(',') if s.strip()]
-WEBHOOK_URLS = [u.strip() for u in os.environ.get('WEBHOOK_URLS', '').split(',') if u.strip()]
-WP_PURGE_KEY = os.environ.get('P_PASS')
-RUN_TIMES = [t.strip() for t in os.environ.get('RUN_TIMES', '').split(',') if t.strip()]
-LOOP_DURATION = int(os.environ.get('LOOP_DURATION', 320))
-SLEEP_MIN = float(os.environ.get('SLEEP_MIN', 6.0))
-SLEEP_MAX = float(os.environ.get('SLEEP_MAX', 10.0))
-BACKOFF_MIN = float(os.environ.get('BACKOFF_MIN', 4.0))
-BACKOFF_MAX = float(os.environ.get('BACKOFF_MAX', 7.0))
+try:
+    SITES = [s.strip() for s in os.environ['GAME_SERVER_API'].split(',') if s.strip()]
+    WEBHOOK_URLS = [u.strip() for u in os.environ['WEBHOOK_URLS'].split(',') if u.strip()]
+    WP_PURGE_KEY = os.environ['P_PASS'].strip()
+    RUN_TIMES = [t.strip() for t in os.environ['RUN_TIMES'].split(',') if t.strip()]
+    LOOP_DURATION = int(os.environ['LOOP_DURATION'])
+    SLEEP_MIN = float(os.environ['SLEEP_MIN'])
+    SLEEP_MAX = float(os.environ['SLEEP_MAX'])
+    BACKOFF_MIN = float(os.environ['BACKOFF_MIN'])
+    BACKOFF_MAX = float(os.environ['BACKOFF_MAX'])
+except Exception:
+    sys.exit(0)
 
 def create_browser_session():
     profiles = [
@@ -134,10 +137,13 @@ def fetch_today_record():
                 timeout=15
             )
             if resp.status_code == 200:
-                data = resp.json()
-                return data.get('data') or {}
+                try:
+                    data = resp.json()
+                    return data.get('data') or {}
+                except Exception:
+                    print(f"API Fetch Attempt {attempt} returned non-JSON response: {resp.text[:250]}")
             else:
-                print(f"API Fetch Attempt {attempt} returned status {resp.status_code}: {resp.text}")
+                print(f"API Fetch Attempt {attempt} returned status {resp.status_code}: {resp.text[:250]}")
         except Exception as e:
             print(f"API Fetch Attempt {attempt} error: {e}")
         time.sleep(2)
@@ -146,6 +152,7 @@ def fetch_today_record():
 def update_round_record(round_num, multi, single, is_master=0):
     endpoint = get_api_endpoint()
     if not endpoint or not WP_PURGE_KEY:
+        print(f"Error: API endpoint or key not configured for Round {round_num}")
         return False, {}
         
     payload = {
@@ -162,13 +169,17 @@ def update_round_record(round_num, multi, single, is_master=0):
             resp = BROWSER_SESSION.post(
                 endpoint,
                 data=payload,
+                params={'key': WP_PURGE_KEY},
                 timeout=15
             )
             if resp.status_code == 200:
-                res_data = resp.json()
-                return res_data.get('updated', False), res_data.get('data', {})
+                try:
+                    res_data = resp.json()
+                    return res_data.get('updated', False), res_data.get('data', {})
+                except Exception:
+                    print(f"API Update Attempt {attempt} (Round {round_num}) non-JSON response: {resp.text[:250]}")
             else:
-                print(f"API Update Attempt {attempt} (Round {round_num}) status {resp.status_code}: {resp.text}")
+                print(f"API Update Attempt {attempt} (Round {round_num}) status {resp.status_code}: {resp.text[:250]}")
         except Exception as e:
             print(f"API Update Attempt {attempt} error (Round {round_num}): {e}")
         time.sleep(1.5)
@@ -416,7 +427,8 @@ def main():
                                 if updated:
                                     existing_row = fresh_data
                                     data_updated = True
-                                    print(f"✅ Round {i} saved & cache purged.")
+                                    print(f"✅ Round {i} saved & cache purged. Target completed.")
+                                    sys.exit(0)
                                 if active_round == i:
                                     active_target_completed = True
                             elif curr_m != m_str or curr_s != s_str:
@@ -425,7 +437,8 @@ def main():
                                 if updated:
                                     existing_row = fresh_data
                                     data_updated = True
-                                    print(f"✅ Round {i} corrected & cache purged.")
+                                    print(f"✅ Round {i} corrected & cache purged. Target completed.")
+                                    sys.exit(0)
                                 if active_round == i:
                                     active_target_completed = True
                             else:
@@ -437,7 +450,8 @@ def main():
                             if updated:
                                 existing_row = fresh_data
                                 data_updated = True
-                                print(f"⚡ Round {i} live-inserted & cache purged.")
+                                print(f"⚡ Round {i} live-inserted & cache purged. Target completed.")
+                                sys.exit(0)
             except Exception as err:
                 print(f"Source {idx} Warning: {err}")
 
