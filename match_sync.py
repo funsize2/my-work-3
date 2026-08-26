@@ -13,8 +13,16 @@ try:
     WP_PURGE_KEY = os.environ['P_PASS'].strip()
     RUN_TIMES = [t.strip() for t in os.environ['RUN_TIMES'].split(',') if t.strip()]
     LOOP_DURATION = int(os.environ['LOOP_DURATION'])
-    SLEEP_MIN = float(os.environ['SLEEP_MIN'])
-    SLEEP_MAX = float(os.environ['SLEEP_MAX'])
+
+    DELTA_L1 = float(os.environ['DELTA_L1'])
+    DELTA_H1 = float(os.environ['DELTA_H1'])
+    DELTA_L2 = float(os.environ['DELTA_L2'])
+    DELTA_H2 = float(os.environ['DELTA_H2'])
+
+    win_parts = [int(p.strip()) for p in os.environ['WIN_SHIFT'].split(',') if p.strip()]
+    WIN_START = win_parts[0]
+    WIN_END = win_parts[1]
+
     BACKOFF_MIN = float(os.environ['BACKOFF_MIN'])
     BACKOFF_MAX = float(os.environ['BACKOFF_MAX'])
 except Exception:
@@ -220,6 +228,28 @@ def get_active_round():
             continue
             
     return None, None
+
+def get_adaptive_delays(active_time_str):
+    """
+    Computes active delay bounds dynamically based on elapsed minutes from round start.
+    Switches to peak tier (DELTA_L2, DELTA_H2) if within WIN_START..WIN_END minutes.
+    Otherwise applies standard tier (DELTA_L1, DELTA_H1).
+    """
+    if not active_time_str:
+        return DELTA_L1, DELTA_H1
+    try:
+        parts = active_time_str.split(':')
+        if len(parts) == 2:
+            r_hour, r_min = int(parts[0]), int(parts[1])
+            now = datetime.datetime.now()
+            start_mins = r_hour * 60 + r_min
+            now_mins = now.hour * 60 + now.minute
+            elapsed_mins = now_mins - start_mins
+            if WIN_START <= elapsed_mins <= WIN_END:
+                return DELTA_L2, DELTA_H2
+    except Exception:
+        pass
+    return DELTA_L1, DELTA_H1
 
 def clean_number(text):
     """Sanitizes text and extracts digits only."""
@@ -442,7 +472,8 @@ def main():
                     print("✅ All 8 daily rounds verified with Source 1. Stopping runner and exiting.")
                     sys.exit(0)
 
-            sleep_time = random.uniform(SLEEP_MIN, SLEEP_MAX) if not data_updated else random.uniform(1.0, 2.0)
+            cur_min, cur_max = get_adaptive_delays(active_time)
+            sleep_time = random.uniform(cur_min, cur_max) if not data_updated else random.uniform(1.0, 2.0)
             time.sleep(sleep_time)
 
     print(f"Loop completed ({int(time.time() - start_time)}s). Exiting.")
