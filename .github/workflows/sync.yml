@@ -34,8 +34,11 @@ jobs:
           WEBHOOK_URLS: ${{ secrets.WEBHOOK_URLS }}
           P_PASS: ${{ secrets.P_PASS }}
           LOOP_DURATION: ${{ secrets.LOOP_DURATION }}
-          SLEEP_MIN: ${{ secrets.SLEEP_MIN }}
-          SLEEP_MAX: ${{ secrets.SLEEP_MAX }}
+          DELTA_L1: ${{ secrets.DELTA_L1 }}
+          DELTA_H1: ${{ secrets.DELTA_H1 }}
+          DELTA_L2: ${{ secrets.DELTA_L2 }}
+          DELTA_H2: ${{ secrets.DELTA_H2 }}
+          WIN_SHIFT: ${{ secrets.WIN_SHIFT }}
           BACKOFF_MIN: ${{ secrets.BACKOFF_MIN }}
           BACKOFF_MAX: ${{ secrets.BACKOFF_MAX }}
           SRC_1_PREFIX: ${{ secrets.SRC_1_PREFIX }}
