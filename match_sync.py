@@ -21,6 +21,10 @@ except Exception:
     sys.exit(0)
 
 def create_browser_session():
+    """
+    Initializes a persistent HTTP session with a realistic browser fingerprint
+    for scraping external game sites.
+    """
     profiles = [
         {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
@@ -108,6 +112,7 @@ def create_browser_session():
 BROWSER_SESSION = create_browser_session()
 
 def get_api_endpoint():
+    """Resolves the WordPress REST API endpoint from env variables."""
     custom_url = os.environ.get('WP_API_URL', '').strip()
     if custom_url:
         if custom_url.endswith('/sync-score'):
@@ -121,10 +126,12 @@ def get_api_endpoint():
     return None
 
 def fetch_today_record():
+    """Fetches today's row from the WordPress custom table to initialize RAM state."""
     endpoint = get_api_endpoint()
     if not endpoint or not WP_PURGE_KEY:
         print("Error: WEBHOOK_URLS / WP_API_URL or P_PASS missing in environment.")
         return {}
+        
     for attempt in range(1, 4):
         try:
             resp = requests.get(
@@ -144,13 +151,16 @@ def fetch_today_record():
         except Exception as e:
             print(f"API Fetch Attempt {attempt} error: {e}")
         time.sleep(2)
+        
     return {}
 
 def update_round_record(round_num, multi, single, is_master=0):
+    """Sends score update to WordPress REST API endpoint."""
     endpoint = get_api_endpoint()
     if not endpoint or not WP_PURGE_KEY:
         print(f"Error: API endpoint or key not configured for Round {round_num}")
         return False, {}
+        
     payload = {
         'key': WP_PURGE_KEY,
         'action': 'update_round',
@@ -159,6 +169,7 @@ def update_round_record(round_num, multi, single, is_master=0):
         'single': single,
         'is_master': is_master
     }
+    
     for attempt in range(1, 4):
         try:
             resp = requests.post(
@@ -171,6 +182,8 @@ def update_round_record(round_num, multi, single, is_master=0):
             if resp.status_code == 200:
                 try:
                     res_data = resp.json()
+                    if res_data.get('updated'):
+                        print(f"Main-site purge result: {res_data.get('purge_details')}")
                     return res_data.get('updated', False), res_data.get('data', {})
                 except Exception:
                     print(f"API Update Attempt {attempt} (Round {round_num}) non-JSON response: {resp.text[:250]}")
@@ -179,13 +192,20 @@ def update_round_record(round_num, multi, single, is_master=0):
         except Exception as e:
             print(f"API Update Attempt {attempt} error (Round {round_num}): {e}")
         time.sleep(1.5)
+        
     return False, {}
 
 def get_active_round():
+    """
+    Checks if current time falls within any round's 30-minute window specified in RUN_TIMES.
+    Returns (round_num, start_time_str) or (None, None)
+    """
     if not RUN_TIMES:
         return None, None
+        
     now = datetime.datetime.now()
     now_minutes = now.hour * 60 + now.minute
+    
     for idx, time_str in enumerate(RUN_TIMES, start=1):
         try:
             parts = time_str.split(':')
@@ -193,24 +213,29 @@ def get_active_round():
             r_hour, r_min = int(parts[0]), int(parts[1])
             start_mins = r_hour * 60 + r_min
             end_mins = start_mins + 30
+            
             if start_mins <= now_minutes < end_mins:
                 return idx, time_str
         except Exception:
             continue
+            
     return None, None
 
 def clean_number(text):
+    """Sanitizes text and extracts digits only."""
     if not text: return None
     digits = re.findall(r'\d+', text)
     return digits[0] if digits else None
 
 def parse_src_1(html, round_num):
     soup = BeautifulSoup(html, 'lxml')
-    cell_prefix = os.environ.get('SRC_1_PREFIX', 'bazi-cell-')
+    cell_prefix = os.environ.get('SRC_1_PREFIX', '').strip()
+    m_cls = os.environ.get('SRC_1_M_CLASS', '').strip()
+    s_cls = os.environ.get('SRC_1_S_CLASS', '').strip()
+    if not cell_prefix or not m_cls or not s_cls:
+        return None, None
     cell = soup.find('td', class_=f'{cell_prefix}{round_num}')
     if cell:
-        m_cls = os.environ.get('SRC_1_M_CLASS', 'field1-val')
-        s_cls = os.environ.get('SRC_1_S_CLASS', 'field2-val')
         m = cell.find(class_=m_cls)
         s = cell.find(class_=s_cls)
         if m and s: 
@@ -219,7 +244,9 @@ def parse_src_1(html, round_num):
 
 def parse_src_2(html, round_num):
     soup = BeautifulSoup(html, 'lxml')
-    container_cls = os.environ.get('SRC_2_CONTAINER', 'flex flex-1 flex-col items-center')
+    container_cls = os.environ.get('SRC_2_CONTAINER', '').strip()
+    if not container_cls:
+        return None, None
     containers = soup.find_all('div', class_=container_cls)
     if len(containers) >= round_num:
         target_round = containers[round_num - 1]
@@ -235,7 +262,9 @@ def parse_src_2(html, round_num):
 
 def parse_src_3(html, round_num):
     soup = BeautifulSoup(html, 'lxml')
-    target_div_cls = os.environ.get('SRC_3_CONTAINER', 'today')
+    target_div_cls = os.environ.get('SRC_3_CONTAINER', '').strip()
+    if not target_div_cls:
+        return None, None
     today_div = soup.find('div', class_=target_div_cls)
     if not today_div:
         today_div = soup.find('table')
@@ -255,7 +284,7 @@ def parse_src_3(html, round_num):
 
 def parse_src_4(html, round_num):
     soup = BeautifulSoup(html, 'lxml')
-    target_cls = os.environ.get('SRC_4_CLASS', 'ffresult')
+    target_cls = os.environ.get('SRC_4_CLASS', '').strip()
     table_fig = None
     if target_cls:
         table_fig = soup.find('figure', class_=lambda c: c and target_cls in c)
@@ -285,109 +314,111 @@ def parse_src_4(html, round_num):
     return None, None
 
 def parse_src_5(html, round_num):
+    """Extracts Source 5's numbered result card without reading round labels or tips cards."""
     soup = BeautifulSoup(html, 'lxml')
-    grid_cls = os.environ.get('SRC_5_GRID', 'grid-cols-4')
-    grid = soup.find('div', class_=lambda c: c and grid_cls in c)
-    if not grid:
-        grid = soup.find('div', class_=lambda c: c and 'grid' in c and 'gap-' in c)
-        if not grid:
-            return None, None
-    cards = grid.find_all('div', recursive=False)
-    if not cards:
-        cards = grid.find_all('div', class_=lambda c: c and 'rounded-2xl' in c)
-    idx = round_num - 1
-    if len(cards) > idx:
-        card = cards[idx]
-        text_elements = card.find_all('div')
-        digits_found = []
-        for el in text_elements:
-            txt = el.get_text(strip=True)
-            if txt.endswith(('st', 'nd', 'rd', 'th')):
-                continue
-            cleaned = clean_number(txt)
-            if cleaned and cleaned not in digits_found:
-                digits_found.append(cleaned)
-        if len(digits_found) >= 2:
-            return digits_found[0], digits_found[1]
-    return None, None
+    grid_class = os.environ.get('SRC_5_GRID', '').strip()
+    if not grid_class:
+        return None, None
 
-def trigger_webhooks():
-    try:
-        urls = WEBHOOK_URLS
-        wp_key = WP_PURGE_KEY
-        for target_url in urls:
-            if wp_key:
-                try:
-                    if '/wp-json/' in target_url:
-                        endpoint = target_url
-                    else:
-                        endpoint = f"{target_url.rstrip('/')}/wp-json/custom/v1/bump-cache-version"
-                    params = {"key": wp_key}
-                    resp = requests.get(endpoint, params=params, headers={'Accept': 'application/json'}, timeout=5)
-                    print(f"Cache Purge Webhook ({resp.status_code}) -> {target_url}")
-                except Exception as e:
-                    print(f"Webhook Error ({target_url}): {e}")
-    except Exception as e: 
-        print(f"Purge Warning: {e}")
+    grid = soup.find('div', class_=lambda c: c and grid_class in c)
+    if not grid:
+        return None, None
+
+    for card in grid.find_all(['div', 'a'], recursive=False):
+        round_label = card.find('div', class_=lambda c: c and 'tracking-widest' in c)
+        if not round_label:
+            continue
+
+        label_match = re.fullmatch(r'(\d+)(?:st|nd|rd|th)', round_label.get_text(strip=True).lower())
+        if not label_match or int(label_match.group(1)) != round_num:
+            continue
+
+        multi_el = card.find('div', class_=lambda c: c and 'animate-number-pop' in c)
+        single_el = card.find('div', class_=lambda c: c and 'text-gradient-gold' in c)
+        if not multi_el or not single_el:
+            return None, None
+
+        multi = clean_number(multi_el.get_text(strip=True))
+        single = clean_number(single_el.get_text(strip=True))
+        if multi is not None and single is not None:
+            return multi, single
+
+    return None, None
 
 def main():
     existing_row = fetch_today_record()
     if not existing_row:
         print("Initial fetch completed (empty or new day record).")
+
     active_round, active_time = get_active_round()
     s1_verified_rounds = set()
+
     if active_round:
         print(f"Active Window: Round {active_round} (Scheduled {active_time})")
     else:
         print("Standard Scan Mode (No specific scheduled window active).")
+
     start_time = time.time()
+
     while (time.time() - start_time) < LOOP_DURATION:
         for idx, url in enumerate(SITES, start=1):
             if (time.time() - start_time) >= LOOP_DURATION:
                 break
+            
             print(f"[{int(time.time() - start_time)}s] Scanning Source {idx}...")
             data_updated = False
+            
             try:
                 resp = BROWSER_SESSION.get(url, timeout=12)
+                
                 if resp.status_code in [403, 429]:
                     print(f"Source {idx} blocked ({resp.status_code}). Skipping.")
                     time.sleep(random.uniform(BACKOFF_MIN, BACKOFF_MAX))
                     continue
+                    
                 if resp.status_code != 200:
                     time.sleep(random.uniform(BACKOFF_MIN, BACKOFF_MAX))
                     continue
+
                 for i in range(1, 9):
                     round_col = f"r{i}"
                     curr_m = str(existing_row.get(f"{round_col}_multi") or '').strip()
                     curr_s = str(existing_row.get(f"{round_col}_single") or '').strip()
+
                     if idx > 1 and curr_m:
                         continue
+
                     if idx == 1 and i in s1_verified_rounds and curr_m:
                         continue
+
                     m, s = None, None
                     if idx == 1: m, s = parse_src_1(resp.text, i)
                     elif idx == 2: m, s = parse_src_2(resp.text, i)
                     elif idx == 3: m, s = parse_src_3(resp.text, i)
                     elif idx == 4: m, s = parse_src_4(resp.text, i)
                     elif idx == 5: m, s = parse_src_5(resp.text, i)
+
                     if m and s:
                         m_str, s_str = str(m).strip(), str(s).strip()
+                        
                         if idx == 1:
-                            s1_verified_rounds.add(i)
                             if not curr_m:
                                 print(f"[Source 1 Master] Inserting Round {i}: ({m_str}-{s_str})")
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
                                     existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
+                                    s1_verified_rounds.add(i)
                                     data_updated = True
                             elif curr_m != m_str or curr_s != s_str:
                                 print(f"[Source 1 Master Verification] Correcting Round {i} from ({curr_m}-{curr_s}) to ({m_str}-{s_str})")
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
                                     existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
+                                    s1_verified_rounds.add(i)
                                     data_updated = True
                             else:
                                 print(f"[Source 1 Master Verified] Round {i} matches existing DB ({curr_m}-{curr_s}).")
+                                s1_verified_rounds.add(i)
                         else:
                             print(f"[Source {idx} Speed] Inserting Round {i}: ({m_str}-{s_str})")
                             updated, fresh_data = update_round_record(i, m_str, s_str, is_master=0)
@@ -396,6 +427,7 @@ def main():
                                 data_updated = True
             except Exception as err:
                 print(f"Source {idx} Warning: {err}")
+
             if active_round:
                 rounds_up_to_active = range(1, active_round + 1)
                 all_exist = all(existing_row.get(f"r{r}_multi") for r in rounds_up_to_active)
@@ -409,8 +441,10 @@ def main():
                 if all_8_exist and all_8_verified:
                     print("✅ All 8 daily rounds verified with Source 1. Stopping runner and exiting.")
                     sys.exit(0)
+
             sleep_time = random.uniform(SLEEP_MIN, SLEEP_MAX) if not data_updated else random.uniform(1.0, 2.0)
             time.sleep(sleep_time)
+
     print(f"Loop completed ({int(time.time() - start_time)}s). Exiting.")
 
 if __name__ == "__main__":
