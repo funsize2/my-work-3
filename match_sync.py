@@ -140,13 +140,19 @@ def fetch_today_record():
         print("Error: WEBHOOK_URLS / WP_API_URL or P_PASS missing in environment.")
         return {}
         
+    api_headers = {
+        'X-Sync-Auth': str(WP_PURGE_KEY).strip(),
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
+        
     for attempt in range(1, 4):
         try:
             resp = requests.get(
                 endpoint,
                 params={'key': WP_PURGE_KEY, 'action': 'get_today'},
-                headers={'Accept': 'application/json'},
-                timeout=15
+                headers=api_headers,
+                timeout=12
             )
             if resp.status_code == 200:
                 try:
@@ -158,7 +164,7 @@ def fetch_today_record():
                 print(f"API Fetch Attempt {attempt} returned status {resp.status_code}: {resp.text[:250]}")
         except Exception as e:
             print(f"API Fetch Attempt {attempt} error: {e}")
-        time.sleep(2)
+        time.sleep(attempt * 2)
         
     return {}
 
@@ -178,14 +184,20 @@ def update_round_record(round_num, multi, single, is_master=0):
         'is_master': is_master
     }
     
+    api_headers = {
+        'X-Sync-Auth': str(WP_PURGE_KEY).strip(),
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
+    
     for attempt in range(1, 4):
         try:
             resp = requests.post(
                 endpoint,
                 data=payload,
                 params={'key': WP_PURGE_KEY},
-                headers={'Accept': 'application/json'},
-                timeout=15
+                headers=api_headers,
+                timeout=12
             )
             if resp.status_code == 200:
                 try:
@@ -199,7 +211,7 @@ def update_round_record(round_num, multi, single, is_master=0):
                 print(f"API Update Attempt {attempt} (Round {round_num}) status {resp.status_code}: {resp.text[:250]}")
         except Exception as e:
             print(f"API Update Attempt {attempt} error (Round {round_num}): {e}")
-        time.sleep(1.5)
+        time.sleep(attempt * 2)
         
     return False, {}
 
@@ -389,6 +401,7 @@ def main():
         print("Standard Scan Mode (No specific scheduled window active).")
 
     start_time = time.time()
+    last_api_attempt_time = {}
 
     while (time.time() - start_time) < LOOP_DURATION:
         for idx, url in enumerate(SITES, start=1):
@@ -430,10 +443,16 @@ def main():
 
                     if m and s:
                         m_str, s_str = str(m).strip(), str(s).strip()
+                        attempt_key = (i, m_str, s_str)
+                        last_attempt = last_api_attempt_time.get(attempt_key, 0)
+                        
+                        if (time.time() - last_attempt) < 15 and not curr_m:
+                            continue
                         
                         if idx == 1:
                             if not curr_m:
                                 print(f"[Source 1 Master] Inserting Round {i}: ({m_str}-{s_str})")
+                                last_api_attempt_time[attempt_key] = time.time()
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
                                     existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
@@ -441,6 +460,7 @@ def main():
                                     data_updated = True
                             elif curr_m != m_str or curr_s != s_str:
                                 print(f"[Source 1 Master Verification] Correcting Round {i} from ({curr_m}-{curr_s}) to ({m_str}-{s_str})")
+                                last_api_attempt_time[attempt_key] = time.time()
                                 updated, fresh_data = update_round_record(i, m_str, s_str, is_master=1)
                                 if updated:
                                     existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
@@ -451,6 +471,7 @@ def main():
                                 s1_verified_rounds.add(i)
                         else:
                             print(f"[Source {idx} Speed] Inserting Round {i}: ({m_str}-{s_str})")
+                            last_api_attempt_time[attempt_key] = time.time()
                             updated, fresh_data = update_round_record(i, m_str, s_str, is_master=0)
                             if updated:
                                 existing_row[f"r{i}_multi"], existing_row[f"r{i}_single"] = m_str, s_str
