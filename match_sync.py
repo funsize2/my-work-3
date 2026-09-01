@@ -205,7 +205,7 @@ def update_round_record(round_num, multi, single, is_master=0):
 
 def get_active_round():
     """
-    Checks if current time falls within any round's 30-minute window specified in RUN_TIMES.
+    Checks if current time falls within any round's 40-minute window specified in RUN_TIMES.
     Returns (round_num, start_time_str) or (None, None)
     """
     if not RUN_TIMES:
@@ -220,7 +220,7 @@ def get_active_round():
             if len(parts) != 2: continue
             r_hour, r_min = int(parts[0]), int(parts[1])
             start_mins = r_hour * 60 + r_min
-            end_mins = start_mins + 30
+            end_mins = start_mins + 40
             
             if start_mins <= now_minutes < end_mins:
                 return idx, time_str
