@@ -411,6 +411,9 @@ def main():
                     continue
 
                 for i in range(1, 9):
+                    if active_round and i > active_round:
+                        continue
+
                     round_col = f"r{i}"
                     curr_m = str(existing_row.get(f"{round_col}_multi") or '').strip()
                     curr_s = str(existing_row.get(f"{round_col}_single") or '').strip()
